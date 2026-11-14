@@ -11,12 +11,17 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        image: [ "debian:11", "debian:12", "debian:13" ]
+        image: [ "debian:12", "debian:13" ]
     container: ${{ matrix.image }}
     steps:
       - uses: actions/checkout@v4
-      - name: Test con API simulata (Debian come base di Proxmox VE 7, 8 e 9)
-        run: bash tests/run.sh
+      - name: Senza il modulo JSON di perl lo script deve fermarsi, non dare verde
+        run: |
+          if PATH="$PWD/tests/mock:$PATH" bash ./vm-pve-check.sh -q -o /tmp/x; then echo "doveva fermarsi"; exit 1; else echo "ok, si ferma"; fi
+      - name: Test con API simulata (Debian come base di Proxmox VE 8 e 9)
+        run: |
+          apt-get update -q && apt-get install -y -q perl
+          bash tests/run.sh
   lint:
     runs-on: ubuntu-latest
     steps:

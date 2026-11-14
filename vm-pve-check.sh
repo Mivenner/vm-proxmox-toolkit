@@ -3,7 +3,7 @@
 # (c) vm technology. Sola lettura: non modifica nulla. Va eseguito come root su un nodo Proxmox VE (7, 8 o 9).
 # Usa solo strumenti gia' presenti sul nodo (pvesh, perl). Uscita: 0 verde, 1 giallo, 2 rosso, 3 errore.
 
-VERSION="1.0.0"; TOOL="VM Proxmox Toolkit"; PREFIX="pve-check"
+VERSION="1.0.1"; TOOL="VM Proxmox Toolkit"; PREFIX="pve-check"
 OUT_DIR=""; CLIENTE=""; TECNICO="${SUDO_USER:-${USER:-}}"; QUIET=0; JSON_ONLY=0; NO_COLOR=0
 SERVE=0; SERVE_PORT=8080; SERVE_BIND="127.0.0.1"
 BK_DAYS=7; SNAP_DAYS=30; TASK_DAYS=7; ST_WARN=80; ST_CRIT=90
@@ -190,13 +190,15 @@ finish() {
 
 have pvesh || { echo "pvesh non trovato: questo strumento va eseguito su un nodo Proxmox VE." >&2; exit 3; }
 have perl || { echo "perl non trovato." >&2; exit 3; }
+JSONMOD=""; for m in JSON::PP JSON; do perl -M"$m" -e1 2>/dev/null && { JSONMOD="$m"; break; }; done
+[ -n "$JSONMOD" ] || { echo "Manca il modulo perl per leggere il JSON (JSON::PP o JSON): su un nodo Proxmox VE e' sempre presente." >&2; exit 3; }
 [ "$IS_ROOT" -eq 1 ] || { echo "Serve root: su Proxmox VE eseguire come root." >&2; exit 3; }
 NOW="$START_TS"; S=$'\037'
 
 # pv PERCORSO [opzioni]: chiamata API in sola lettura, JSON su stdout
 pv() { tmo 60 pvesh get "$@" --output-format json 2>/dev/null; }
 # jt "campo1 campo2 a.b": da JSON (elenco di oggetti, o un oggetto solo) a righe con i campi separati da \037
-jt() { perl -MJSON::PP -e '
+jt() { perl -M"$JSONMOD" -e '
     my @f = split / /, shift; local $/; my $d = eval { decode_json(<STDIN>) }; exit 1 unless defined $d;
     $d = [$d] if ref $d eq "HASH"; exit 1 unless ref $d eq "ARRAY";
     for my $o (@$d) { next unless ref $o eq "HASH";
