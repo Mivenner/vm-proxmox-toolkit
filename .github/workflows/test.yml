@@ -1,0 +1,26 @@
+name: Test
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        image: [ "debian:11", "debian:12", "debian:13" ]
+    container: ${{ matrix.image }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Test con API simulata (Debian come base di Proxmox VE 7, 8 e 9)
+        run: bash tests/run.sh
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          bash -n vm-pve-check.sh
+          shellcheck -S error vm-pve-check.sh tests/run.sh tests/mock/pvesh

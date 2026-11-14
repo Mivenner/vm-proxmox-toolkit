@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+# Finto pvesh per i test: risponde con dati modellati sulle risposte dell'API di Proxmox VE.
+# SCENARIO=problemi (default) oppure SCENARIO=sano
+[ "$1" = "get" ] || { echo "solo get" >&2; exit 2; }
+path="$2"; now=$(date +%s); d=86400; sc="${SCENARIO:-problemi}"
+G=1073741824
+case "$path" in
+/cluster/status)
+  if [ "$sc" = sano ]; then echo '[{"type":"node","name":"pve1","online":1,"local":1,"nodeid":0,"ip":"192.168.1.10","id":"node/pve1"}]'
+  else echo '[{"type":"cluster","name":"aiello","quorate":1,"nodes":3,"version":5,"id":"cluster"},{"type":"node","name":"pve1","online":1,"local":1,"nodeid":1,"ip":"192.168.1.10","id":"node/pve1"},{"type":"node","name":"pve2","online":1,"local":0,"nodeid":2,"ip":"192.168.1.11","id":"node/pve2"},{"type":"node","name":"pve3","online":0,"local":0,"nodeid":3,"ip":"192.168.1.12","id":"node/pve3"}]'; fi ;;
+/nodes/*/status)
+  if [ "$sc" = sano ]; then echo "{\"uptime\":864000,\"loadavg\":[\"0.10\",\"0.20\",\"0.15\"],\"memory\":{\"total\":$((64*G)),\"used\":$((20*G)),\"free\":$((44*G))},\"rootfs\":{\"total\":$((100*G)),\"used\":$((12*G)),\"avail\":$((88*G))},\"pveversion\":\"pve-manager/8.4.1\"}"
+  else echo "{\"uptime\":8640000,\"loadavg\":[\"1.10\",\"1.20\",\"1.15\"],\"memory\":{\"total\":$((64*G)),\"used\":$((60*G)),\"free\":$((4*G))},\"rootfs\":{\"total\":$((100*G)),\"used\":$((86*G)),\"avail\":$((14*G))},\"pveversion\":\"pve-manager/8.4.1\"}"; fi ;;
+/nodes/*/services)
+  x=running; [ "$sc" != sano ] && [ "$path" = /nodes/pve2/services ] && x=dead
+  echo "[{\"name\":\"pve-cluster\",\"service\":\"pve-cluster\",\"desc\":\"The Proxmox VE cluster filesystem\",\"state\":\"running\",\"unit-state\":\"enabled\",\"active-state\":\"active\"},{\"name\":\"pvedaemon\",\"state\":\"running\",\"unit-state\":\"enabled\"},{\"name\":\"pveproxy\",\"state\":\"running\",\"unit-state\":\"enabled\"},{\"name\":\"pvestatd\",\"state\":\"$x\",\"unit-state\":\"enabled\"},{\"name\":\"pvescheduler\",\"state\":\"running\",\"unit-state\":\"enabled\"},{\"name\":\"corosync\",\"state\":\"$([ "$sc" = sano ] && echo dead || echo running)\",\"unit-state\":\"enabled\"},{\"name\":\"postfix\",\"state\":\"dead\",\"unit-state\":\"disabled\"}]" ;;
+/nodes/*/disks/list)
+  if [ "$sc" = sano ] || [ "$path" = /nodes/pve2/disks/list ]; then echo "[{\"devpath\":\"/dev/nvme0n1\",\"health\":\"PASSED\",\"wearout\":97,\"model\":\"Samsung SSD 980 PRO 1TB\",\"type\":\"nvme\",\"size\":1000204886016},{\"devpath\":\"/dev/sda\",\"health\":\"PASSED\",\"wearout\":\"N/A\",\"model\":\"WDC WD40EFAX\",\"type\":\"hdd\",\"size\":4000787030016}]"
+  else echo "[{\"devpath\":\"/dev/nvme0n1\",\"health\":\"PASSED\",\"wearout\":12,\"model\":\"Samsung SSD 980 PRO 1TB\",\"type\":\"nvme\"},{\"devpath\":\"/dev/sda\",\"health\":\"FAILED\",\"wearout\":\"N/A\",\"model\":\"WDC WD40EFAX\",\"type\":\"hdd\"}]"; fi ;;
+/nodes/*/apt/update)
+  [ "$sc" = sano ] && echo '[]' || echo '[{"Package":"pve-manager","Version":"8.4.5","OldVersion":"8.4.1","Origin":"Proxmox"},{"Package":"libssl3","Version":"3.0.16","OldVersion":"3.0.15","Origin":"Debian"}]' ;;
+/nodes/*/storage)
+  n="${path#/nodes/}"; n="${n%/storage}"
+  if [ "$sc" = sano ]; then echo "[{\"storage\":\"local\",\"type\":\"dir\",\"content\":\"iso,vztmpl,backup\",\"active\":1,\"enabled\":1,\"shared\":0,\"total\":$((100*G)),\"used\":$((12*G)),\"avail\":$((88*G)),\"used_fraction\":0.12},{\"storage\":\"local-zfs\",\"type\":\"zfspool\",\"content\":\"images,rootdir\",\"active\":1,\"enabled\":1,\"shared\":0,\"total\":$((900*G)),\"used\":$((300*G)),\"avail\":$((600*G))}]"
+  else echo "[{\"storage\":\"local\",\"type\":\"dir\",\"content\":\"iso,vztmpl\",\"active\":1,\"enabled\":1,\"shared\":0,\"total\":$((100*G)),\"used\":$((86*G)),\"avail\":$((14*G))},{\"storage\":\"local-zfs\",\"type\":\"zfspool\",\"content\":\"images,rootdir\",\"active\":1,\"enabled\":1,\"shared\":0,\"total\":$((900*G)),\"used\":$((850*G)),\"avail\":$((50*G))},{\"storage\":\"pbs\",\"type\":\"pbs\",\"content\":\"backup\",\"active\":1,\"enabled\":1,\"shared\":1,\"total\":$((4000*G)),\"used\":$((1500*G)),\"avail\":$((2500*G))},{\"storage\":\"nas-nfs\",\"type\":\"nfs\",\"content\":\"backup,iso\",\"active\":0,\"enabled\":1,\"shared\":1,\"total\":0,\"used\":0,\"avail\":0},{\"storage\":\"vecchio\",\"type\":\"dir\",\"content\":\"backup\",\"active\":0,\"enabled\":0,\"shared\":0}]"; fi ;;
+/cluster/resources)
+  if [ "$sc" = sano ]; then echo '[{"id":"qemu/100","type":"qemu","vmid":100,"name":"srv-dc01","node":"pve1","status":"running","template":0,"maxmem":8589934592},{"id":"lxc/200","type":"lxc","vmid":200,"name":"pihole","node":"pve1","status":"running","template":0}]'
+  else echo '[{"id":"qemu/101","type":"qemu","vmid":101,"name":"gestionale","node":"pve1","status":"running","template":0},{"id":"qemu/100","type":"qemu","vmid":100,"name":"srv-dc01","node":"pve1","status":"running","template":0},{"id":"qemu/102","type":"qemu","vmid":102,"name":"test-win11","node":"pve2","status":"stopped","template":0,"lock":"backup"},{"id":"lxc/200","type":"lxc","vmid":200,"name":"pihole","node":"pve1","status":"running","template":0},{"id":"qemu/9000","type":"qemu","vmid":9000,"name":"tpl-debian12","node":"pve1","status":"stopped","template":1},{"id":"qemu/103","type":"qemu","vmid":103,"name":"nuova-vm","node":"pve2","status":"running","template":0}]'; fi ;;
+/cluster/backup)
+  if [ "$sc" = sano ]; then echo '[{"id":"backup-11111111-aaaa","schedule":"21:00","storage":"local","all":1,"mode":"snapshot","enabled":1,"type":"vzdump"}]'
+  else echo '[{"id":"backup-11111111-aaaa","schedule":"sat 01:00","storage":"pbs","vmid":"100,101,200","mode":"snapshot","enabled":1,"type":"vzdump"},{"id":"backup-22222222-bbbb","schedule":"02:00","storage":"nas-nfs","all":1,"mode":"snapshot","enabled":0,"type":"vzdump"}]'; fi ;;
+/cluster/backup-info/not-backed-up)
+  [ "$sc" = sano ] && echo '[]' || echo '[{"vmid":102,"name":"test-win11","type":"qemu"},{"vmid":103,"name":"nuova-vm","type":"qemu"},{"vmid":9000,"name":"tpl-debian12","type":"qemu"}]' ;;
+/nodes/*/storage/*/content)
+  if [ "$sc" = sano ]; then echo "[{\"volid\":\"local:backup/vzdump-qemu-100-a.vma.zst\",\"vmid\":100,\"ctime\":$((now-6*3600)),\"size\":$((30*G)),\"format\":\"vma.zst\",\"content\":\"backup\",\"subtype\":\"qemu\"},{\"volid\":\"local:backup/vzdump-lxc-200-a.tar.zst\",\"vmid\":200,\"ctime\":$((now-6*3600)),\"size\":$((1*G)),\"format\":\"tar.zst\",\"content\":\"backup\",\"subtype\":\"lxc\"}]"
+  else echo "[{\"volid\":\"pbs:backup/vm/100/A\",\"vmid\":100,\"ctime\":$((now-1*d)),\"size\":$((60*G)),\"format\":\"pbs-vm\",\"content\":\"backup\",\"subtype\":\"qemu\",\"verification\":{\"state\":\"ok\",\"upid\":\"UPID:x\"},\"notes\":\"srv-dc01\nseconda riga\"},{\"volid\":\"pbs:backup/vm/100/B\",\"vmid\":100,\"ctime\":$((now-8*d)),\"size\":$((59*G)),\"format\":\"pbs-vm\",\"content\":\"backup\",\"verification\":{\"state\":\"failed\",\"upid\":\"UPID:y\"}},{\"volid\":\"pbs:backup/vm/101/A\",\"vmid\":101,\"ctime\":$((now-15*d)),\"size\":$((120*G)),\"format\":\"pbs-vm\",\"content\":\"backup\"},{\"volid\":\"pbs:backup/ct/200/A\",\"vmid\":200,\"ctime\":$((now-1*d)),\"size\":$((2*G)),\"format\":\"pbs-ct\",\"content\":\"backup\"},{\"volid\":\"pbs:backup/vm/555/A\",\"vmid\":555,\"ctime\":$((now-200*d)),\"size\":$((40*G)),\"format\":\"pbs-vm\",\"content\":\"backup\"}]"; fi ;;
+/nodes/*/tasks)
+  if [ "$sc" = sano ] || [ "$path" = /nodes/pve2/tasks ]; then echo '[]'
+  else echo "[{\"upid\":\"UPID:pve1:0001:0002:0003:vzdump:101:root@pam:\",\"type\":\"vzdump\",\"id\":\"101\",\"node\":\"pve1\",\"user\":\"root@pam\",\"starttime\":$((now-2*d)),\"endtime\":$((now-2*d+60)),\"status\":\"job errors\"},{\"upid\":\"UPID:pve1:0001:0002:0004:vzdump::root@pam:\",\"type\":\"vzdump\",\"id\":\"\",\"node\":\"pve1\",\"user\":\"root@pam\",\"starttime\":$((now-1*d)),\"endtime\":$((now-1*d+60)),\"status\":\"WARNINGS: 1\"},{\"upid\":\"UPID:pve1:0001:0002:0005:vzdump::root@pam:\",\"type\":\"vzdump\",\"id\":\"\",\"node\":\"pve1\",\"user\":\"root@pam\",\"starttime\":$((now-40*d)),\"endtime\":$((now-40*d+60)),\"status\":\"job errors\"}]"; fi ;;
+*) echo "404 $path" >&2; exit 2 ;;
+esac
