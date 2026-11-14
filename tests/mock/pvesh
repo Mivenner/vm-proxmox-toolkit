@@ -2,7 +2,7 @@
 # Finto pvesh per i test: risponde con dati modellati sulle risposte dell'API di Proxmox VE.
 # SCENARIO=problemi (default) oppure SCENARIO=sano
 [ "$1" = "get" ] || { echo "solo get" >&2; exit 2; }
-path="$2"; now=$(date +%s); d=86400; sc="${SCENARIO:-problemi}"
+path="$2"; now=$(( $(date +%s) - 3600 )); d=86400; sc="${SCENARIO:-problemi}"
 G=1073741824
 case "$path" in
 /cluster/status)
